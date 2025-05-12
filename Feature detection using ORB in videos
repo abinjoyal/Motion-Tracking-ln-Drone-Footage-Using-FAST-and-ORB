@@ -1,0 +1,77 @@
+import cv2
+import numpy as np
+
+# Load the drone footage
+video_path = "C:\\Users\\ This PC \\Downloads\\Untitled video - Made with Clipchamp (1).mp4"
+cap = cv2.VideoCapture(video_path)
+
+# Check if the video opened successfully
+if not cap.isOpened():
+    print("Error: Could not open video.")
+    exit()
+
+# Initialize the ORB detector
+orb = cv2.ORB_create(nfeatures=500)
+
+# Initialize the Brute-Force Matcher
+bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+
+# Read the first frame
+ret, prev_frame = cap.read()
+if not ret:
+    print("Error: Could not read the first frame.")
+    exit()
+
+prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+
+# Detect keypoints and compute descriptors for the first frame
+prev_keypoints, prev_descriptors = orb.detectAndCompute(prev_gray, None)
+
+# Create a mask for drawing purposes
+mask = np.zeros_like(prev_frame)
+
+while cap.isOpened():
+    ret, curr_frame = cap.read()
+    if not ret:
+        break
+
+    curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+
+    # Detect keypoints and compute descriptors for the current frame
+    curr_keypoints, curr_descriptors = orb.detectAndCompute(curr_gray, None)
+
+    if curr_descriptors is not None and prev_descriptors is not None:
+        # Match descriptors between previous and current frames
+        matches = bf.match(prev_descriptors, curr_descriptors)
+        matches = sorted(matches, key=lambda x: x.distance)
+
+        # Draw only the top 50 matches
+        for match in matches[:50]:
+            prev_idx = match.queryIdx
+            curr_idx = match.trainIdx
+
+            # Get the keypoint positions
+            prev_pt = tuple(map(int, prev_keypoints[prev_idx].pt))
+            curr_pt = tuple(map(int, curr_keypoints[curr_idx].pt))
+
+            # Draw the motion path
+            mask = cv2.line(mask, curr_pt, prev_pt, (0, 255, 0), 2)
+            curr_frame = cv2.circle(curr_frame, curr_pt, 5, (0, 0, 255), -1)
+
+        # Combine the mask with the current frame
+        img = cv2.add(curr_frame, mask)
+
+        # Display the output
+        cv2.imshow('Motion Tracking', img)
+
+        # Break on 'q' key press
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+    # Update previous frame and keypoints/descriptors
+    prev_gray = curr_gray.copy()
+    prev_keypoints = curr_keypoints
+    prev_descriptors = curr_descriptors
+
+cap.release()
+cv2.destroyAllWindows()
